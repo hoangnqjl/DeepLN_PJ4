@@ -75,7 +75,7 @@ def run_phobert_experiment(dropout, batch_size, learning_rate, train_texts, trai
     eval_result = trainer.evaluate()
     
     # Save model
-    model_save_path = f"d:/Data/VKU/Projects/DeepLN_PJ4/results/phobert_best.pth"
+    model_save_path = f"results/phobert_best.pth"
     os.makedirs(os.path.dirname(model_save_path), exist_ok=True)
     torch.save(model.state_dict(), model_save_path)
     
@@ -88,8 +88,8 @@ def run_phobert_experiment(dropout, batch_size, learning_rate, train_texts, trai
 
 if __name__ == "__main__":
     # Load data
-    train_df = pd.read_csv("d:/Data/VKU/Projects/DeepLN_PJ4/processed_data/train.csv")
-    val_df = pd.read_csv("d:/Data/VKU/Projects/DeepLN_PJ4/processed_data/val.csv")
+    train_df = pd.read_csv("processed_data/train.csv")
+    val_df = pd.read_csv("processed_data/val.csv")
     
     # Due to time constraints in demo, I will only run a few key combinations for PhoBERT
     # or just one if it's too slow.
@@ -106,6 +106,6 @@ if __name__ == "__main__":
                 all_bert_results.append(res)
                 
     report_df = pd.DataFrame(all_bert_results)
-    report_df.to_csv("d:/Data/VKU/Projects/DeepLN_PJ4/results/phobert_comparison.csv", index=False)
+    report_df.to_csv("results/phobert_comparison.csv", index=False)
     print("\nPhoBERT Optimization Summary:")
     print(report_df)

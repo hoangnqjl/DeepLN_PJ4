@@ -46,11 +46,11 @@ def preprocess_data(file_path):
     return train_df, val_df
 
 if __name__ == "__main__":
-    dataset_path = "d:/Data/VKU/Projects/DeepLN_PJ4/dataset/public_train.csv"
+    dataset_path = "dataset/public_train.csv"
     train_df, val_df = preprocess_data(dataset_path)
     
     # Save processed data
-    output_dir = "d:/Data/VKU/Projects/DeepLN_PJ4/processed_data"
+    output_dir = "processed_data"
     os.makedirs(output_dir, exist_ok=True)
     
     train_df.to_csv(os.path.join(output_dir, "train.csv"), index=False)

@@ -115,7 +115,7 @@ def run_experiment(dropout, batch_size, train_texts, train_labels, val_texts, va
     train_hist, val_hist = train_model(model, train_loader, val_loader, optimizer, criterion, epochs=5)
     
     # Save the best model (using last as simplified version)
-    results_path = f"d:/Data/VKU/Projects/DeepLN_PJ4/results/lstm_dr{dropout}_bs{batch_size}.pth"
+    results_path = f"results/lstm_dr{dropout}_bs{batch_size}.pth"
     os.makedirs(os.path.dirname(results_path), exist_ok=True)
     torch.save(model.state_dict(), results_path)
     
@@ -129,8 +129,8 @@ def run_experiment(dropout, batch_size, train_texts, train_labels, val_texts, va
 
 if __name__ == "__main__":
     # Load data
-    train_df = pd.read_csv("d:/Data/VKU/Projects/DeepLN_PJ4/processed_data/train.csv")
-    val_df = pd.read_csv("d:/Data/VKU/Projects/DeepLN_PJ4/processed_data/val.csv")
+    train_df = pd.read_csv("processed_data/train.csv")
+    val_df = pd.read_csv("processed_data/val.csv")
     
     # Build vocab
     all_text = " ".join(train_df['tokenized_message'].tolist()).split()
@@ -164,11 +164,11 @@ if __name__ == "__main__":
         'Val_F1': r['final_val_f1'] 
     } for r in all_results])
     
-    report_df.to_csv("d:/Data/VKU/Projects/DeepLN_PJ4/results/lstm_comparison.csv", index=False)
+    report_df.to_csv("results/lstm_comparison.csv", index=False)
     
     # Save all histories to a JSON for visualization
     import json
-    with open("d:/Data/VKU/Projects/DeepLN_PJ4/results/lstm_histories.json", "w") as f:
+    with open("results/lstm_histories.json", "w") as f:
         # Convert numpy floats to standard floats for JSON
         serializable_results = []
         for r in all_results:
@@ -186,5 +186,5 @@ if __name__ == "__main__":
     
     # Save vocab for demo
     import pickle
-    with open("d:/Data/VKU/Projects/DeepLN_PJ4/results/vocab.pkl", "wb") as f:
+    with open("results/vocab.pkl", "wb") as f:
         pickle.dump(word_to_idx, f)
