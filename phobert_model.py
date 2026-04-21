@@ -54,7 +54,7 @@ def run_phobert_experiment(dropout, batch_size, learning_rate, train_texts, trai
         num_train_epochs=3,
         per_device_train_batch_size=batch_size,
         per_device_eval_batch_size=batch_size,
-        evaluation_strategy="epoch",
+        eval_strategy="epoch",
         save_strategy="epoch",
         learning_rate=learning_rate,
         weight_decay=0.01,
@@ -74,16 +74,37 @@ def run_phobert_experiment(dropout, batch_size, learning_rate, train_texts, trai
     trainer.train()
     eval_result = trainer.evaluate()
     
-    # Save model
-    model_save_path = f"results/phobert_best.pth"
-    os.makedirs(os.path.dirname(model_save_path), exist_ok=True)
-    torch.save(model.state_dict(), model_save_path)
+    # Save model in format compatible with from_pretrained
+    model_save_path = "results/phobert_best"
+    os.makedirs(model_save_path, exist_ok=True)
+    trainer.save_model(model_save_path)
+    
+    # Also save a .pth for compatibility if needed
+    torch.save(model.state_dict(), os.path.join(model_save_path, "phobert_best.pth"))
+    
+    # Extract history
+    history = trainer.state.log_history
+    train_history = {'loss': [], 'f1': []}
+    val_history = {'loss': [], 'f1': []}
+    
+    for log in history:
+        if 'loss' in log and 'epoch' in log:
+            train_history['loss'].append(log['loss'])
+        if 'eval_loss' in log:
+            val_history['loss'].append(log['eval_loss'])
+        if 'eval_f1' in log:
+            val_history['f1'].append(log['eval_f1'])
+    
+    # Fill in dummy F1 for training if not calculated to keep lengths consistent for plotting
+    train_history['f1'] = [0.0] * len(train_history['loss'])
     
     return {
         'dropout': dropout,
         'batch_size': batch_size,
         'learning_rate': learning_rate,
         'val_f1': eval_result['eval_f1'],
+        'train_history': train_history,
+        'val_history': val_history
     }
 
 if __name__ == "__main__":
@@ -105,7 +126,19 @@ if __name__ == "__main__":
                 res = run_phobert_experiment(dr, bs, lr, train_df['clean_message'], train_df['label'], val_df['clean_message'], val_df['label'])
                 all_bert_results.append(res)
                 
-    report_df = pd.DataFrame(all_bert_results)
+    report_df = pd.DataFrame([{
+        'Dropout': r['dropout'],
+        'BatchSize': r['batch_size'],
+        'LearningRate': r['learning_rate'],
+        'Val_F1': r['val_f1']
+    } for r in all_bert_results])
+    
     report_df.to_csv("results/phobert_comparison.csv", index=False)
+    
+    # Save all histories to a JSON for visualization (similar to LSTM)
+    import json
+    with open("results/phobert_histories.json", "w") as f:
+        json.dump(all_bert_results, f)
+        
     print("\nPhoBERT Optimization Summary:")
     print(report_df)
