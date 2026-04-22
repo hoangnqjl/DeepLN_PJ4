@@ -56,9 +56,18 @@ def main():
     lstm_model.load_state_dict(torch.load('results/lstm_dr0.5_bs32.pth', map_location=device))
     
     # 2. Load PhoBERT
-    phobert_path = 'results/phobert_base_dropout0.1_lr3e-05'
-    phobert_tokenizer = AutoTokenizer.from_pretrained("vinai/phobert-base")
-    phobert_model = RobertaForSequenceClassification.from_pretrained(phobert_path).to(device)
+    phobert_path = 'results/phobert_best'
+    
+    if not os.path.exists(phobert_path):
+        print(f"\n[!] LỖI: Không tìm thấy mô hình PhoBERT tại '{phobert_path}'")
+        print(" -> Nếu bạn vừa train trên Colab, hãy tải thư mục 'results/phobert_best' về máy.")
+        print(" -> Nếu chưa train, hãy chạy 'python phobert_model.py' để tạo mô hình.")
+        phobert_model = None
+        phobert_tokenizer = None
+    else:
+        print("Đang tải mô hình PhoBERT...")
+        phobert_tokenizer = AutoTokenizer.from_pretrained(phobert_path)
+        phobert_model = RobertaForSequenceClassification.from_pretrained(phobert_path).to(device)
     
     while True:
         print("\n" + "="*30)
@@ -68,7 +77,10 @@ def main():
             
         print(f"\nKết quả dự đoán:")
         print(f" - LSTM:    {predict_lstm(text, lstm_model, word_to_idx)}")
-        print(f" - PhoBERT: {predict_phobert(text, phobert_model, phobert_tokenizer)}")
+        if phobert_model:
+            print(f" - PhoBERT: {predict_phobert(text, phobert_model, phobert_tokenizer)}")
+        else:
+            print(f" - PhoBERT: (Chưa tải được mô hình)")
 
 if __name__ == "__main__":
     main()

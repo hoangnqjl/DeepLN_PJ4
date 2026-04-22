@@ -10,6 +10,30 @@ from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_sc
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print(f"Using device: {device}")
 
+# --- Colab Support & Path Setup ---
+try:
+    import google.colab
+    IN_COLAB = True
+except ImportError:
+    IN_COLAB = False
+
+if IN_COLAB:
+    from google.colab import drive
+    print("Detected Google Colab. Mounting Google Drive...")
+    drive.mount('/content/drive')
+    # Use a specific folder in Drive to persist results
+    BASE_PATH = "/content/drive/MyDrive/DeepLN_PJ4"
+    if not os.path.exists(BASE_PATH):
+        os.makedirs(BASE_PATH)
+    print(f"Working in Drive: {BASE_PATH}")
+else:
+    BASE_PATH = "."
+
+RESULTS_DIR = os.path.join(BASE_PATH, "results")
+os.makedirs(RESULTS_DIR, exist_ok=True)
+PHOBERT_BEST_PATH = os.path.join(RESULTS_DIR, "phobert_best")
+# ---------------------------------
+
 class FakeNewsBERTDataset(Dataset):
     def __init__(self, encodings, labels):
         self.encodings = encodings
@@ -50,7 +74,7 @@ def run_phobert_experiment(dropout, batch_size, learning_rate, train_texts, trai
     model.to(device)
     
     training_args = TrainingArguments(
-        output_dir=f"./results/phobert_dr{dropout}_bs{batch_size}_lr{learning_rate}",
+        output_dir=os.path.join(RESULTS_DIR, f"phobert_dr{dropout}_bs{batch_size}_lr{learning_rate}"),
         num_train_epochs=3,
         per_device_train_batch_size=batch_size,
         per_device_eval_batch_size=batch_size,
@@ -59,7 +83,7 @@ def run_phobert_experiment(dropout, batch_size, learning_rate, train_texts, trai
         learning_rate=learning_rate,
         weight_decay=0.01,
         load_best_model_at_end=True,
-        logging_dir='./logs',
+        logging_dir=os.path.join(BASE_PATH, 'logs'),
         logging_steps=50,
     )
     
@@ -74,10 +98,11 @@ def run_phobert_experiment(dropout, batch_size, learning_rate, train_texts, trai
     trainer.train()
     eval_result = trainer.evaluate()
     
-    # Save model in format compatible with from_pretrained
-    model_save_path = "results/phobert_best"
+    # Save model and tokenizer in format compatible with from_pretrained
+    model_save_path = PHOBERT_BEST_PATH
     os.makedirs(model_save_path, exist_ok=True)
     trainer.save_model(model_save_path)
+    tokenizer.save_pretrained(model_save_path) # Save tokenizer too for easy loading
     
     # Also save a .pth for compatibility if needed
     torch.save(model.state_dict(), os.path.join(model_save_path, "phobert_best.pth"))
@@ -108,9 +133,17 @@ def run_phobert_experiment(dropout, batch_size, learning_rate, train_texts, trai
     }
 
 if __name__ == "__main__":
-    # Load data
-    train_df = pd.read_csv("processed_data/train.csv")
-    val_df = pd.read_csv("processed_data/val.csv")
+    # Load data from local or Drive
+    train_path = os.path.join(BASE_PATH, "processed_data/train.csv")
+    val_path = os.path.join(BASE_PATH, "processed_data/val.csv")
+    
+    if not os.path.exists(train_path):
+        # Fallback to current directory if not in Drive relative path
+        train_path = "processed_data/train.csv"
+        val_path = "processed_data/val.csv"
+
+    train_df = pd.read_csv(train_path)
+    val_df = pd.read_csv(val_path)
     
     # Due to time constraints in demo, I will only run a few key combinations for PhoBERT
     # or just one if it's too slow.
@@ -133,11 +166,11 @@ if __name__ == "__main__":
         'Val_F1': r['val_f1']
     } for r in all_bert_results])
     
-    report_df.to_csv("results/phobert_comparison.csv", index=False)
+    report_df.to_csv(os.path.join(RESULTS_DIR, "phobert_comparison.csv"), index=False)
     
     # Save all histories to a JSON for visualization (similar to LSTM)
     import json
-    with open("results/phobert_histories.json", "w") as f:
+    with open(os.path.join(RESULTS_DIR, "phobert_histories.json"), "w") as f:
         json.dump(all_bert_results, f)
         
     print("\nPhoBERT Optimization Summary:")

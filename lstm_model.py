@@ -13,6 +13,29 @@ from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_sc
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print(f"Using device: {device}")
 
+# --- Colab Support & Path Setup ---
+try:
+    import google.colab
+    IN_COLAB = True
+except ImportError:
+    IN_COLAB = False
+
+if IN_COLAB:
+    from google.colab import drive
+    print("Detected Google Colab. Mounting Google Drive...")
+    drive.mount('/content/drive')
+    # Use a specific folder in Drive to persist results
+    BASE_PATH = "/content/drive/MyDrive/DeepLN_PJ4"
+    if not os.path.exists(BASE_PATH):
+        os.makedirs(BASE_PATH)
+    print(f"Working in Drive: {BASE_PATH}")
+else:
+    BASE_PATH = "."
+
+RESULTS_DIR = os.path.join(BASE_PATH, "results")
+os.makedirs(RESULTS_DIR, exist_ok=True)
+# ---------------------------------
+
 class FakeNewsDataset(Dataset):
     def __init__(self, texts, labels, word_to_idx, max_len=100):
         self.texts = texts
@@ -115,8 +138,7 @@ def run_experiment(dropout, batch_size, train_texts, train_labels, val_texts, va
     train_hist, val_hist = train_model(model, train_loader, val_loader, optimizer, criterion, epochs=5)
     
     # Save the best model (using last as simplified version)
-    results_path = f"results/lstm_dr{dropout}_bs{batch_size}.pth"
-    os.makedirs(os.path.dirname(results_path), exist_ok=True)
+    results_path = os.path.join(RESULTS_DIR, f"lstm_dr{dropout}_bs{batch_size}.pth")
     torch.save(model.state_dict(), results_path)
     
     return {
@@ -128,9 +150,16 @@ def run_experiment(dropout, batch_size, train_texts, train_labels, val_texts, va
     }
 
 if __name__ == "__main__":
-    # Load data
-    train_df = pd.read_csv("processed_data/train.csv")
-    val_df = pd.read_csv("processed_data/val.csv")
+    # Load data from local or Drive
+    train_path = os.path.join(BASE_PATH, "processed_data/train.csv")
+    val_path = os.path.join(BASE_PATH, "processed_data/val.csv")
+    
+    if not os.path.exists(train_path):
+        train_path = "processed_data/train.csv"
+        val_path = "processed_data/val.csv"
+
+    train_df = pd.read_csv(train_path)
+    val_df = pd.read_csv(val_path)
     
     # Build vocab
     all_text = " ".join(train_df['tokenized_message'].tolist()).split()
@@ -164,11 +193,11 @@ if __name__ == "__main__":
         'Val_F1': r['final_val_f1'] 
     } for r in all_results])
     
-    report_df.to_csv("results/lstm_comparison.csv", index=False)
+    report_df.to_csv(os.path.join(RESULTS_DIR, "lstm_comparison.csv"), index=False)
     
     # Save all histories to a JSON for visualization
     import json
-    with open("results/lstm_histories.json", "w") as f:
+    with open(os.path.join(RESULTS_DIR, "lstm_histories.json"), "w") as f:
         # Convert numpy floats to standard floats for JSON
         serializable_results = []
         for r in all_results:
@@ -186,5 +215,5 @@ if __name__ == "__main__":
     
     # Save vocab for demo
     import pickle
-    with open("results/vocab.pkl", "wb") as f:
+    with open(os.path.join(RESULTS_DIR, "vocab.pkl"), "wb") as f:
         pickle.dump(word_to_idx, f)
