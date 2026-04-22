@@ -19,13 +19,20 @@ except ImportError:
 
 if IN_COLAB:
     from google.colab import drive
-    print("Detected Google Colab. Mounting Google Drive...")
-    drive.mount('/content/drive')
-    # Use a specific folder in Drive to persist results
-    BASE_PATH = "/content/drive/MyDrive/DeepLN_PJ4"
-    if not os.path.exists(BASE_PATH):
-        os.makedirs(BASE_PATH)
-    print(f"Working in Drive: {BASE_PATH}")
+    print("Detected Google Colab.")
+    try:
+        print("Mounting Google Drive (Interactive)...")
+        drive.mount('/content/drive')
+        # Use a specific folder in Drive to persist results
+        BASE_PATH = "/content/drive/MyDrive/DeepLN_PJ4"
+        if not os.path.exists(BASE_PATH):
+            os.makedirs(BASE_PATH)
+        print(f"Working in Drive: {BASE_PATH}")
+    except Exception as e:
+        print(f"\n[!] KHÔNG THỂ kết nối Drive tự động: {e}")
+        print(" -> Nếu bạn chạy qua Terminal, hãy mount Drive bằng cell Notebook trước.")
+        print(" -> Tiếp tục với bộ nhớ tạm thời của Colab...")
+        BASE_PATH = "."
 else:
     BASE_PATH = "."
 
