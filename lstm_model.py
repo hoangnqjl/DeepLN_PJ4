@@ -21,21 +21,26 @@ except ImportError:
     IN_COLAB = False
 
 if IN_COLAB:
-    from google.colab import drive
     print("Detected Google Colab.")
-    try:
-        print("Mounting Google Drive (Interactive)...")
-        drive.mount('/content/drive')
-        # Use a specific folder in Drive to persist results
+    # Check if drive is already mounted
+    if os.path.exists('/content/drive/MyDrive'):
+        print("Google Drive is already mounted.")
         BASE_PATH = "/content/drive/MyDrive/DeepLN_PJ4"
-        if not os.path.exists(BASE_PATH):
-            os.makedirs(BASE_PATH)
-        print(f"Working in Drive: {BASE_PATH}")
-    except Exception as e:
-        print(f"\n[!] KHÔNG THỂ kết nối Drive tự động: {e}")
-        print(" -> Nếu bạn chạy qua Terminal, hãy mount Drive bằng cell Notebook trước.")
-        print(" -> Tiếp tục với bộ nhớ tạm thời của Colab...")
-        BASE_PATH = "."
+    else:
+        from google.colab import drive
+        try:
+            print("Attempting to mount Google Drive...")
+            drive.mount('/content/drive')
+            BASE_PATH = "/content/drive/MyDrive/DeepLN_PJ4"
+        except Exception as e:
+            print(f"\n[!] KHÔNG THỂ kết nối Drive tự động: {e}")
+            print(" -> Nếu bạn chạy qua Terminal, hãy mount Drive bằng cell Notebook trước.")
+            print(" -> Tiếp tục với bộ nhớ tạm thời của Colab...")
+            BASE_PATH = "."
+
+    if BASE_PATH != "." and not os.path.exists(BASE_PATH):
+        os.makedirs(BASE_PATH)
+        print(f"Created project folder in Drive: {BASE_PATH}")
 else:
     BASE_PATH = "."
 
@@ -168,9 +173,11 @@ if __name__ == "__main__":
     train_df = pd.read_csv(train_path)
     val_df = pd.read_csv(val_path)
     
-    # Build vocab
-    all_text = " ".join(train_df['tokenized_message'].tolist()).split()
-    vocab = Counter(all_text)
+    # Build vocab efficiently
+    vocab = Counter()
+    for msg in train_df['tokenized_message']:
+        vocab.update(str(msg).split())
+        
     most_common = vocab.most_common(10000)
     word_to_idx = {word: i+2 for i, (word, count) in enumerate(most_common)}
     word_to_idx['<PAD>'] = 0
