@@ -1,15 +1,30 @@
 import pandas as pd
 import json
+import os
 
 def main():
+    # --- Colab Support & Path Setup ---
+    try:
+        import google.colab
+        IN_COLAB = True
+    except ImportError:
+        IN_COLAB = False
+
+    if IN_COLAB:
+        BASE_PATH = "/content/drive/MyDrive/DeepLN_PJ4"
+    else:
+        BASE_PATH = "."
+
+    VISUAL_DIR = os.path.join(BASE_PATH, "visual")
+
     # Load comparison data
     try:
-        lstm_comp = pd.read_csv('results/lstm_comparison.csv')
+        lstm_comp = pd.read_csv(os.path.join(VISUAL_DIR, 'lstm_comparison.csv'))
     except:
         lstm_comp = pd.DataFrame()
         
     try:
-        phobert_comp = pd.read_csv('results/phobert_comparison.csv')
+        phobert_comp = pd.read_csv(os.path.join(VISUAL_DIR, 'phobert_comparison.csv'))
     except:
         phobert_comp = pd.DataFrame()
 
@@ -32,9 +47,23 @@ def main():
     print("\n## Summary Comparison")
     summary = []
     if best_lstm is not None:
-        summary.append({'Model': 'LSTM', 'Best Params': f"DR={best_lstm['Dropout']}, BS={int(best_lstm['BatchSize'])}", 'Best F1': best_lstm['Val_F1']})
+        summary.append({
+            'Model': 'LSTM', 
+            'Best Params': f"DR={best_lstm['Dropout']}, BS={int(best_lstm['BatchSize'])}", 
+            'Acc': best_lstm.get('Val_Acc', '-'),
+            'Prec': best_lstm.get('Val_Precision', '-'),
+            'Rec': best_lstm.get('Val_Recall', '-'),
+            'F1': best_lstm['Val_F1']
+        })
     if best_phobert is not None:
-        summary.append({'Model': 'PhoBERT', 'Best Params': f"DR={best_phobert['Dropout']}, LR={best_phobert['LearningRate']}", 'Best F1': best_phobert['Val_F1']})
+        summary.append({
+            'Model': 'PhoBERT', 
+            'Best Params': f"DR={best_phobert['Dropout']}, LR={best_phobert['LearningRate']}", 
+            'Acc': best_phobert.get('Val_Acc', '-'),
+            'Prec': best_phobert.get('Val_Precision', '-'),
+            'Rec': best_phobert.get('Val_Recall', '-'),
+            'F1': best_phobert['Val_F1']
+        })
     
     if summary:
         print(pd.DataFrame(summary).to_markdown(index=False))

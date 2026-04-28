@@ -4,6 +4,18 @@ from transformers import AutoTokenizer, RobertaForSequenceClassification
 import pickle
 import os
 from pyvi import ViTokenizer
+import re
+
+def clean_text(text):
+    if not isinstance(text, str):
+        return ""
+    # Remove URLs
+    text = re.sub(r'http\S+|www\S+|https\S+', '', text, flags=re.MULTILINE)
+    # Lowercase
+    text = text.lower()
+    # Remove extra spaces
+    text = re.sub(r'\s+', ' ', text).strip()
+    return text
 
 # --- LSTM Model Definition (must match training) ---
 class FakeNewsLSTM(nn.Module):
@@ -22,10 +34,11 @@ class FakeNewsLSTM(nn.Module):
 
 def predict_lstm(text, model, word_to_idx, max_len=100):
     model.eval()
-    tokenized = ViTokenizer.tokenize(text).split()
+    cleaned = clean_text(text)
+    tokenized = ViTokenizer.tokenize(cleaned).split()
     indexed = [word_to_idx.get(word, word_to_idx['<UNK>']) for word in tokenized]
     if len(indexed) < max_len:
-        indexed += [0] * (max_len - len(indexed))
+        indexed = [0] * (max_len - len(indexed)) + indexed
     else:
         indexed = indexed[:max_len]
     
@@ -49,14 +62,14 @@ def main():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     
     # 1. Load LSTM
-    with open('results/vocab.pkl', 'rb') as f:
+    with open('lstm/vocab.pkl', 'rb') as f:
         word_to_idx = pickle.load(f)
     
     lstm_model = FakeNewsLSTM(len(word_to_idx), 100, 128, 2, 2, 0.5).to(device)
-    lstm_model.load_state_dict(torch.load('results/lstm_dr0.5_bs32.pth', map_location=device))
+    lstm_model.load_state_dict(torch.load('lstm/lstm_dr0.5_bs32.pth', map_location=device))
     
     # 2. Load PhoBERT
-    phobert_path = 'results/phobert_best'
+    phobert_path = 'phobert/phobert_best'
     
     if not os.path.exists(phobert_path):
         print(f"\n[!] LỖI: Không tìm thấy mô hình PhoBERT tại '{phobert_path}'")

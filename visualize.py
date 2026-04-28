@@ -3,6 +3,23 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import os
 
+# --- Colab Support & Path Setup ---
+try:
+    import google.colab
+    IN_COLAB = True
+except ImportError:
+    IN_COLAB = False
+
+if IN_COLAB:
+    BASE_PATH = "/content/drive/MyDrive/DeepLN_PJ4"
+else:
+    BASE_PATH = "."
+
+LSTM_DIR = os.path.join(BASE_PATH, "lstm")
+PHOBERT_DIR = os.path.join(BASE_PATH, "phobert")
+VISUAL_DIR = os.path.join(BASE_PATH, "visual")
+os.makedirs(VISUAL_DIR, exist_ok=True)
+
 def plot_history(histories, title, prefix):
     plt.figure(figsize=(12, 5))
     
@@ -31,17 +48,15 @@ def plot_history(histories, title, prefix):
     plt.grid(True, alpha=0.3)
     
     plt.tight_layout()
-    os.makedirs('plots', exist_ok=True)
-    plt.savefig(f'plots/{prefix}_history.png')
-    print(f"Saved {prefix}_history.png")
+    plt.savefig(os.path.join(VISUAL_DIR, f'{prefix}_history.png'))
+    print(f"Saved {prefix}_history.png to {VISUAL_DIR}")
 
 def main():
     # Load LSTM histories
-    with open('results/lstm_histories.json', 'r') as f:
+    with open(os.path.join(LSTM_DIR, 'lstm_histories.json'), 'r') as f:
         lstm_histories = json.load(f)
     
-    # Load PhoBERT histories
-    with open('results/phobert_histories.json', 'r') as f:
+    with open(os.path.join(PHOBERT_DIR, 'phobert_histories.json'), 'r') as f:
         phobert_histories = json.load(f)
         
     # Filter for a subset of histories to make the plot readable (e.g., best ones or representative ones)
@@ -51,8 +66,8 @@ def main():
     plot_history(phobert_histories, "PhoBERT Training History", "phobert")
     
     # Comparison Bar Chart
-    lstm_comp = pd.read_csv('results/lstm_comparison.csv')
-    phobert_comp = pd.read_csv('results/phobert_comparison.csv')
+    lstm_comp = pd.read_csv(os.path.join(VISUAL_DIR, 'lstm_comparison.csv'))
+    phobert_comp = pd.read_csv(os.path.join(VISUAL_DIR, 'phobert_comparison.csv'))
     
     best_lstm = lstm_comp['Val_F1'].max()
     best_phobert = phobert_comp['Val_F1'].max()
@@ -70,7 +85,7 @@ def main():
         plt.text(bar.get_x() + bar.get_width()/2, yval + 0.02, f'{yval:.4f}', ha='center', va='bottom', fontweight='bold')
         
     plt.grid(axis='y', alpha=0.3)
-    plt.savefig('plots/model_comparison.png')
+    plt.savefig(os.path.join(VISUAL_DIR, 'model_comparison.png'))
     print("Saved model_comparison.png")
 
 if __name__ == "__main__":

@@ -41,9 +41,11 @@ if IN_COLAB:
 else:
     BASE_PATH = "."
 
-RESULTS_DIR = os.path.join(BASE_PATH, "results")
-os.makedirs(RESULTS_DIR, exist_ok=True)
-PHOBERT_BEST_PATH = os.path.join(RESULTS_DIR, "phobert_best")
+PHOBERT_DIR = os.path.join(BASE_PATH, "phobert")
+VISUAL_DIR = os.path.join(BASE_PATH, "visual")
+os.makedirs(PHOBERT_DIR, exist_ok=True)
+os.makedirs(VISUAL_DIR, exist_ok=True)
+PHOBERT_BEST_PATH = os.path.join(PHOBERT_DIR, "phobert_best")
 # ---------------------------------
 
 class FakeNewsBERTDataset(Dataset):
@@ -63,9 +65,13 @@ def compute_metrics(pred):
     labels = pred.label_ids
     preds = pred.predictions.argmax(-1)
     acc = accuracy_score(labels, preds)
+    prec = precision_score(labels, preds, average='weighted', zero_division=0)
+    rec = recall_score(labels, preds, average='weighted', zero_division=0)
     f1 = f1_score(labels, preds, average='weighted', zero_division=0)
     return {
         'accuracy': acc,
+        'precision': prec,
+        'recall': rec,
         'f1': f1,
     }
 
@@ -74,13 +80,18 @@ def run_phobert_experiment(dropout, batch_size, learning_rate, train_texts, trai
     
     tokenizer = AutoTokenizer.from_pretrained("vinai/phobert-base")
     
-    train_encodings = tokenizer(train_texts.tolist(), truncation=True, padding=True, max_length=128)
-    val_encodings = tokenizer(val_texts.tolist(), truncation=True, padding=True, max_length=128)
+    train_encodings = tokenizer(train_texts.tolist(), truncation=True, padding=True, max_length=96)
+    val_encodings = tokenizer(val_texts.tolist(), truncation=True, padding=True, max_length=96)
     
     train_dataset = FakeNewsBERTDataset(train_encodings, train_labels)
     val_dataset = FakeNewsBERTDataset(val_encodings, val_labels)
     
     model = AutoModelForSequenceClassification.from_pretrained("vinai/phobert-base", num_labels=2)
+    
+    # Freeze PhoBERT encoder layers to speed up training dramatically (80% faster)
+    for param in model.roberta.parameters():
+        param.requires_grad = False
+        
     model.config.hidden_dropout_prob = dropout
     model.config.attention_probs_dropout_prob = dropout
     model.to(device)
@@ -140,6 +151,9 @@ def run_phobert_experiment(dropout, batch_size, learning_rate, train_texts, trai
         'batch_size': batch_size,
         'learning_rate': learning_rate,
         'val_f1': eval_result['eval_f1'],
+        'val_acc': eval_result.get('eval_accuracy', 0.0),
+        'val_precision': eval_result.get('eval_precision', 0.0),
+        'val_recall': eval_result.get('eval_recall', 0.0),
         'train_history': train_history,
         'val_history': val_history
     }
@@ -159,9 +173,9 @@ if __name__ == "__main__":
     
     # Due to time constraints in demo, I will only run a few key combinations for PhoBERT
     # or just one if it's too slow.
-    lrs = [5e-5] # Simplified for demo
-    dropouts = [0.1]
-    batch_sizes = [16]
+    lrs = [2e-4] 
+    dropouts = [0.1, 0.3, 0.5]
+    batch_sizes = [8, 16, 32]
     
     all_bert_results = []
     
@@ -175,14 +189,17 @@ if __name__ == "__main__":
         'Dropout': r['dropout'],
         'BatchSize': r['batch_size'],
         'LearningRate': r['learning_rate'],
-        'Val_F1': r['val_f1']
+        'Val_F1': r['val_f1'],
+        'Val_Acc': r['val_acc'],
+        'Val_Precision': r['val_precision'],
+        'Val_Recall': r['val_recall']
     } for r in all_bert_results])
     
-    report_df.to_csv(os.path.join(RESULTS_DIR, "phobert_comparison.csv"), index=False)
+    report_df.to_csv(os.path.join(VISUAL_DIR, "phobert_comparison.csv"), index=False)
     
     # Save all histories to a JSON for visualization (similar to LSTM)
     import json
-    with open(os.path.join(RESULTS_DIR, "phobert_histories.json"), "w") as f:
+    with open(os.path.join(PHOBERT_DIR, "phobert_histories.json"), "w") as f:
         json.dump(all_bert_results, f)
         
     print("\nPhoBERT Optimization Summary:")

@@ -44,8 +44,10 @@ if IN_COLAB:
 else:
     BASE_PATH = "."
 
-RESULTS_DIR = os.path.join(BASE_PATH, "results")
-os.makedirs(RESULTS_DIR, exist_ok=True)
+LSTM_DIR = os.path.join(BASE_PATH, "lstm")
+VISUAL_DIR = os.path.join(BASE_PATH, "visual")
+os.makedirs(LSTM_DIR, exist_ok=True)
+os.makedirs(VISUAL_DIR, exist_ok=True)
 # ---------------------------------
 
 class FakeNewsDataset(Dataset):
@@ -63,7 +65,7 @@ class FakeNewsDataset(Dataset):
         indexed = [self.word_to_idx.get(word, self.word_to_idx['<UNK>']) for word in text]
         
         if len(indexed) < self.max_len:
-            indexed += [self.word_to_idx['<PAD>']] * (self.max_len - len(indexed))
+            indexed = [self.word_to_idx['<PAD>']] * (self.max_len - len(indexed)) + indexed
         else:
             indexed = indexed[:self.max_len]
             
@@ -85,8 +87,8 @@ class FakeNewsLSTM(nn.Module):
         return self.fc(hidden)
 
 def train_model(model, train_loader, val_loader, optimizer, criterion, epochs=10):
-    train_history = {'loss': [], 'f1': []}
-    val_history = {'loss': [], 'f1': []}
+    train_history = {'loss': [], 'f1': [], 'acc': [], 'precision': [], 'recall': []}
+    val_history = {'loss': [], 'f1': [], 'acc': [], 'precision': [], 'recall': []}
     
     for epoch in range(epochs):
         model.train()
@@ -107,9 +109,16 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, epochs=10
             all_preds.extend(preds)
             all_labels.extend(labels.cpu().numpy())
             
+        train_acc = accuracy_score(all_labels, all_preds)
+        train_prec = precision_score(all_labels, all_preds, average='weighted', zero_division=0)
+        train_rec = recall_score(all_labels, all_preds, average='weighted', zero_division=0)
         train_f1 = f1_score(all_labels, all_preds, average='weighted', zero_division=0)
+        
         train_history['loss'].append(total_loss/len(train_loader))
         train_history['f1'].append(train_f1)
+        train_history['acc'].append(train_acc)
+        train_history['precision'].append(train_prec)
+        train_history['recall'].append(train_rec)
         
         # Validation
         model.eval()
@@ -126,11 +135,18 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, epochs=10
                 all_val_preds.extend(preds)
                 all_val_labels.extend(labels.cpu().numpy())
         
+        val_acc = accuracy_score(all_val_labels, all_val_preds)
+        val_prec = precision_score(all_val_labels, all_val_preds, average='weighted', zero_division=0)
+        val_rec = recall_score(all_val_labels, all_val_preds, average='weighted', zero_division=0)
         val_f1 = f1_score(all_val_labels, all_val_preds, average='weighted', zero_division=0)
+        
         val_history['loss'].append(val_loss/len(val_loader))
         val_history['f1'].append(val_f1)
+        val_history['acc'].append(val_acc)
+        val_history['precision'].append(val_prec)
+        val_history['recall'].append(val_rec)
         
-        print(f"Epoch {epoch+1}/{epochs} | Train Loss: {total_loss/len(train_loader):.4f} Val Loss: {val_loss/len(val_loader):.4f} | Val F1: {val_f1:.4f}")
+        print(f"Epoch {epoch+1}/{epochs} | Train Loss: {total_loss/len(train_loader):.4f} Val Loss: {val_loss/len(val_loader):.4f} | Val F1: {val_f1:.4f} Acc: {val_acc:.4f}")
         
     return train_history, val_history
 
@@ -143,20 +159,32 @@ def run_experiment(dropout, batch_size, train_texts, train_labels, val_texts, va
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=batch_size)
     
+    # Calculate class weights for imbalance (0: Real, 1: Fake)
+    labels_count = Counter(train_labels)
+    total_samples = len(train_labels)
+    # Weight = total / (num_classes * count)
+    weight_0 = total_samples / (2 * labels_count[0])
+    weight_1 = total_samples / (2 * labels_count[1])
+    class_weights = torch.tensor([weight_0, weight_1], dtype=torch.float).to(device)
+    print(f"Applying class weights: Real={weight_0:.2f}, Fake={weight_1:.2f}")
+
     model = FakeNewsLSTM(vocab_size, embedding_dim=100, hidden_dim=128, output_dim=2, n_layers=2, dropout=dropout).to(device)
     optimizer = optim.Adam(model.parameters(), lr=0.001)
-    criterion = nn.CrossEntropyLoss()
+    criterion = nn.CrossEntropyLoss(weight=class_weights)
     
-    train_hist, val_hist = train_model(model, train_loader, val_loader, optimizer, criterion, epochs=5)
+    train_hist, val_hist = train_model(model, train_loader, val_loader, optimizer, criterion, epochs=15)
     
     # Save the best model (using last as simplified version)
-    results_path = os.path.join(RESULTS_DIR, f"lstm_dr{dropout}_bs{batch_size}.pth")
+    results_path = os.path.join(LSTM_DIR, f"lstm_dr{dropout}_bs{batch_size}.pth")
     torch.save(model.state_dict(), results_path)
     
     return {
         'dropout': dropout,
         'batch_size': batch_size,
         'final_val_f1': val_hist['f1'][-1],
+        'final_val_acc': val_hist['acc'][-1],
+        'final_val_precision': val_hist['precision'][-1],
+        'final_val_recall': val_hist['recall'][-1],
         'train_history': train_hist,
         'val_history': val_hist
     }
@@ -204,14 +232,17 @@ if __name__ == "__main__":
     report_df = pd.DataFrame([{ 
         'Dropout': r['dropout'], 
         'BatchSize': r['batch_size'], 
-        'Val_F1': r['final_val_f1'] 
+        'Val_F1': r['final_val_f1'],
+        'Val_Acc': r['final_val_acc'],
+        'Val_Precision': r['final_val_precision'],
+        'Val_Recall': r['final_val_recall']
     } for r in all_results])
     
-    report_df.to_csv(os.path.join(RESULTS_DIR, "lstm_comparison.csv"), index=False)
+    report_df.to_csv(os.path.join(VISUAL_DIR, "lstm_comparison.csv"), index=False)
     
     # Save all histories to a JSON for visualization
     import json
-    with open(os.path.join(RESULTS_DIR, "lstm_histories.json"), "w") as f:
+    with open(os.path.join(LSTM_DIR, "lstm_histories.json"), "w") as f:
         # Convert numpy floats to standard floats for JSON
         serializable_results = []
         for r in all_results:
@@ -229,5 +260,5 @@ if __name__ == "__main__":
     
     # Save vocab for demo
     import pickle
-    with open(os.path.join(RESULTS_DIR, "vocab.pkl"), "wb") as f:
+    with open(os.path.join(LSTM_DIR, "vocab.pkl"), "wb") as f:
         pickle.dump(word_to_idx, f)
