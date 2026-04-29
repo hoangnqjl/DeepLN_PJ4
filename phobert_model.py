@@ -7,6 +7,7 @@ import numpy as np
 import json
 import os
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+from transformers.trainer_utils import get_last_checkpoint
 
 # Set device
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -54,10 +55,49 @@ os.makedirs(RESULTS_DIR, exist_ok=True)
 # ---------------------------------
 
 LABEL_MAPPING = {0: "Real", 1: "Fake"}
+REQUIRED_RESULT_KEYS = {
+    "dropout",
+    "batch_size",
+    "learning_rate",
+    "run_name",
+    "val_f1",
+    "val_acc",
+    "val_precision",
+    "val_recall",
+}
 
 
 def lr_to_tag(lr):
     return f"{lr:.0e}".replace("e-0", "e-").replace("e+0", "e").replace("+", "")
+
+
+def save_json_atomic(data, path, encoder=None):
+    tmp_path = f"{path}.tmp"
+    with open(tmp_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, cls=encoder)
+    os.replace(tmp_path, path)
+
+
+def load_valid_experiment_result(path, expected_run_name, dropout, batch_size, learning_rate):
+    with open(path, "r", encoding="utf-8") as f:
+        res = json.load(f)
+
+    missing_keys = REQUIRED_RESULT_KEYS - set(res)
+    if missing_keys:
+        raise ValueError(f"missing keys: {sorted(missing_keys)}")
+
+    if res["run_name"] != expected_run_name:
+        raise ValueError(f"run_name mismatch: {res['run_name']} != {expected_run_name}")
+
+    if abs(float(res["dropout"]) - float(dropout)) > 1e-12:
+        raise ValueError("dropout mismatch")
+    if int(res["batch_size"]) != int(batch_size):
+        raise ValueError("batch_size mismatch")
+    if abs(float(res["learning_rate"]) - float(learning_rate)) > 1e-12:
+        raise ValueError("learning_rate mismatch")
+
+    res["val_f1"] = float(res["val_f1"])
+    return res
 
 
 def build_training_args(**kwargs):
@@ -147,7 +187,13 @@ def run_phobert_experiment(dropout, batch_size, learning_rate, train_texts, trai
         compute_metrics=compute_metrics,
     )
     
-    trainer.train()
+    last_checkpoint = None
+    if os.path.isdir(training_args.output_dir):
+        last_checkpoint = get_last_checkpoint(training_args.output_dir)
+        if last_checkpoint is not None:
+            print(f"Resuming {run_name} from checkpoint: {last_checkpoint}")
+
+    trainer.train(resume_from_checkpoint=last_checkpoint)
     eval_result = trainer.evaluate()
     val_f1 = eval_result['eval_f1']
     saved_as_best = val_f1 > best_score
@@ -172,8 +218,7 @@ def run_phobert_experiment(dropout, batch_size, learning_rate, train_texts, trai
             },
             "label_mapping": LABEL_MAPPING,
         }
-        with open(os.path.join(PHOBERT_DIR, "phobert_best_meta.json"), "w") as f:
-            json.dump(best_meta, f, indent=2)
+        save_json_atomic(best_meta, os.path.join(PHOBERT_DIR, "phobert_best_meta.json"))
         print(f"New best PhoBERT saved to {PHOBERT_BEST_PATH} (F1={val_f1:.4f})")
     
     # Extract history
@@ -189,7 +234,7 @@ def run_phobert_experiment(dropout, batch_size, learning_rate, train_texts, trai
         if 'eval_f1' in log:
             val_history['f1'].append(log['eval_f1'])
     
-    return {
+    res_data = {
         'dropout': dropout,
         'batch_size': batch_size,
         'learning_rate': learning_rate,
@@ -202,6 +247,13 @@ def run_phobert_experiment(dropout, batch_size, learning_rate, train_texts, trai
         'train_history': train_history,
         'val_history': val_history
     }
+    
+    # Save individual experiment results to skip if rerun
+    exp_dir = os.path.join(RESULTS_DIR, run_name)
+    os.makedirs(exp_dir, exist_ok=True)
+    save_json_atomic(res_data, os.path.join(exp_dir, "experiment_results.json"))
+        
+    return res_data
 
 if __name__ == "__main__":
     # Load data from local or Drive
@@ -228,6 +280,19 @@ if __name__ == "__main__":
     for lr in lrs:
         for dr in dropouts:
             for bs in batch_sizes:
+                run_name = f"phobert_dr{dr}_bs{bs}_lr{lr_to_tag(lr)}"
+                exp_res_path = os.path.join(RESULTS_DIR, run_name, "experiment_results.json")
+                
+                if os.path.exists(exp_res_path):
+                    print(f"\n>>> Skipping {run_name}, already trained. Loading results...")
+                    try:
+                        res = load_valid_experiment_result(exp_res_path, run_name, dr, bs, lr)
+                        all_bert_results.append(res)
+                        best_score = max(best_score, res['val_f1'])
+                        continue
+                    except Exception as e:
+                        print(f"[!] Invalid result file for {run_name}: {e}. Retraining...")
+                    
                 res = run_phobert_experiment(
                     dr,
                     bs,
@@ -267,8 +332,7 @@ if __name__ == "__main__":
                 return obj.tolist()
             return super(NpEncoder, self).default(obj)
 
-    with open(os.path.join(PHOBERT_DIR, "phobert_histories.json"), "w") as f:
-        json.dump(all_bert_results, f, cls=NpEncoder)
+    save_json_atomic(all_bert_results, os.path.join(PHOBERT_DIR, "phobert_histories.json"), encoder=NpEncoder)
 
         
     print("\nPhoBERT Optimization Summary:")
