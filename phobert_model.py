@@ -181,6 +181,8 @@ if __name__ == "__main__":
 
     dropouts = [0.1, 0.3, 0.5]
     batch_sizes = [8, 16, 32]
+
+
     
     all_bert_results = []
     
