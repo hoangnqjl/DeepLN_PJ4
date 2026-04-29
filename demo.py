@@ -6,6 +6,32 @@ import os
 from pyvi import ViTokenizer
 import re
 
+# --- Colab Support & Path Setup ---
+try:
+    import google.colab
+    IN_COLAB = True
+except ImportError:
+    IN_COLAB = False
+
+if IN_COLAB:
+    print("Detected Google Colab.")
+    if os.path.exists('/content/drive/MyDrive'):
+        BASE_PATH = "/content/drive/MyDrive/DeepLN_PJ4"
+    else:
+        from google.colab import drive
+        try:
+            drive.mount('/content/drive')
+            BASE_PATH = "/content/drive/MyDrive/DeepLN_PJ4"
+        except Exception as e:
+            BASE_PATH = "."
+else:
+    BASE_PATH = "."
+
+LSTM_DIR = os.path.join(BASE_PATH, "lstm")
+PHOBERT_DIR = os.path.join(BASE_PATH, "phobert")
+# ---------------------------------
+
+
 def clean_text(text):
     if not isinstance(text, str):
         return ""
@@ -62,14 +88,15 @@ def main():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     
     # 1. Load LSTM
-    with open('lstm/vocab.pkl', 'rb') as f:
+    with open(os.path.join(LSTM_DIR, 'vocab.pkl'), 'rb') as f:
         word_to_idx = pickle.load(f)
     
     lstm_model = FakeNewsLSTM(len(word_to_idx), 100, 128, 2, 2, 0.5).to(device)
-    lstm_model.load_state_dict(torch.load('lstm/lstm_dr0.5_bs32.pth', map_location=device))
+    lstm_model.load_state_dict(torch.load(os.path.join(LSTM_DIR, 'lstm_dr0.5_bs32.pth'), map_location=device))
     
     # 2. Load PhoBERT
-    phobert_path = 'phobert/phobert_best'
+    phobert_path = os.path.join(PHOBERT_DIR, 'phobert_best')
+
     
     if not os.path.exists(phobert_path):
         print(f"\n[!] LỖI: Không tìm thấy mô hình PhoBERT tại '{phobert_path}'")

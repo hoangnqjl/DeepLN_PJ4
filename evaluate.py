@@ -70,11 +70,12 @@ def main():
     
     print("\n## Conclusion")
     if best_phobert is not None and best_lstm is not None:
-        diff = best_phobert['Best F1'] - best_lstm['Best F1']
+        diff = best_phobert['Val_F1'] - best_lstm['Val_F1']
         if diff > 0:
             print(f"PhoBERT outperformed LSTM by {diff:.4f} in F1-score.")
         else:
             print(f"LSTM outperformed PhoBERT by {-diff:.4f} in F1-score.")
+
     
 if __name__ == "__main__":
     main()

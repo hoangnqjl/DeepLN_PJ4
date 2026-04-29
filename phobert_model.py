@@ -46,6 +46,9 @@ VISUAL_DIR = os.path.join(BASE_PATH, "visual")
 os.makedirs(PHOBERT_DIR, exist_ok=True)
 os.makedirs(VISUAL_DIR, exist_ok=True)
 PHOBERT_BEST_PATH = os.path.join(PHOBERT_DIR, "phobert_best")
+RESULTS_DIR = os.path.join(PHOBERT_DIR, "results")
+os.makedirs(RESULTS_DIR, exist_ok=True)
+
 # ---------------------------------
 
 class FakeNewsBERTDataset(Dataset):
@@ -199,8 +202,19 @@ if __name__ == "__main__":
     
     # Save all histories to a JSON for visualization (similar to LSTM)
     import json
+    class NpEncoder(json.JSONEncoder):
+        def default(self, obj):
+            if isinstance(obj, np.integer):
+                return int(obj)
+            if isinstance(obj, np.floating):
+                return float(obj)
+            if isinstance(obj, np.ndarray):
+                return obj.tolist()
+            return super(NpEncoder, self).default(obj)
+
     with open(os.path.join(PHOBERT_DIR, "phobert_histories.json"), "w") as f:
-        json.dump(all_bert_results, f)
+        json.dump(all_bert_results, f, cls=NpEncoder)
+
         
     print("\nPhoBERT Optimization Summary:")
     print(report_df)
