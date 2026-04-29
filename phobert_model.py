@@ -91,9 +91,10 @@ def run_phobert_experiment(dropout, batch_size, learning_rate, train_texts, trai
     
     model = AutoModelForSequenceClassification.from_pretrained("vinai/phobert-base", num_labels=2)
     
-    # Freeze PhoBERT encoder layers to speed up training dramatically (80% faster)
-    for param in model.roberta.parameters():
-        param.requires_grad = False
+    # Unfrozen PhoBERT encoder layers for full fine-tuning
+    # for param in model.roberta.parameters():
+    #     param.requires_grad = False
+
         
     model.config.hidden_dropout_prob = dropout
     model.config.attention_probs_dropout_prob = dropout
@@ -176,7 +177,8 @@ if __name__ == "__main__":
     
     # Due to time constraints in demo, I will only run a few key combinations for PhoBERT
     # or just one if it's too slow.
-    lrs = [2e-4] 
+    lrs = [2e-5] # Lower LR for full fine-tuning to prevent catastrophic forgetting
+
     dropouts = [0.1, 0.3, 0.5]
     batch_sizes = [8, 16, 32]
     
