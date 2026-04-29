@@ -1,4 +1,8 @@
 import os
+import sys
+# Thêm thư mục cha vào sys.path để tìm thấy file phobert_model.py
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
 import pandas as pd
 from phobert_model import run_phobert_experiment, load_valid_experiment_result, lr_to_tag, RESULTS_DIR, BASE_PATH
 
