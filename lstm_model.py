@@ -5,7 +5,11 @@ from torch.utils.data import Dataset, DataLoader
 import pandas as pd
 import numpy as np
 from collections import Counter
+import copy
+import json
 import os
+import pickle
+import shutil
 import matplotlib.pyplot as plt
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 
@@ -50,6 +54,19 @@ os.makedirs(LSTM_DIR, exist_ok=True)
 os.makedirs(VISUAL_DIR, exist_ok=True)
 # ---------------------------------
 
+LABEL_MAPPING = {0: "Real", 1: "Fake"}
+LSTM_ARCHITECTURE = {
+    "embedding_dim": 100,
+    "hidden_dim": 128,
+    "output_dim": 2,
+    "n_layers": 2,
+    "max_len": 100,
+}
+
+
+def lr_to_tag(lr):
+    return f"{lr:.0e}".replace("e-0", "e-").replace("e+0", "e").replace("+", "")
+
 class FakeNewsDataset(Dataset):
     def __init__(self, texts, labels, word_to_idx, max_len=100):
         self.texts = texts
@@ -89,6 +106,10 @@ class FakeNewsLSTM(nn.Module):
 def train_model(model, train_loader, val_loader, optimizer, criterion, epochs=10):
     train_history = {'loss': [], 'f1': [], 'acc': [], 'precision': [], 'recall': []}
     val_history = {'loss': [], 'f1': [], 'acc': [], 'precision': [], 'recall': []}
+    best_epoch = 0
+    best_val_f1 = -1.0
+    best_state_dict = None
+    best_metrics = {}
     
     for epoch in range(epochs):
         model.train()
@@ -145,13 +166,25 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, epochs=10
         val_history['acc'].append(val_acc)
         val_history['precision'].append(val_prec)
         val_history['recall'].append(val_rec)
+
+        if val_f1 > best_val_f1:
+            best_epoch = epoch + 1
+            best_val_f1 = val_f1
+            best_state_dict = copy.deepcopy(model.state_dict())
+            best_metrics = {
+                "val_loss": val_loss / len(val_loader),
+                "val_acc": val_acc,
+                "val_precision": val_prec,
+                "val_recall": val_rec,
+                "val_f1": val_f1,
+            }
         
         print(f"Epoch {epoch+1}/{epochs} | Train Loss: {total_loss/len(train_loader):.4f} Val Loss: {val_loss/len(val_loader):.4f} | Val F1: {val_f1:.4f} Acc: {val_acc:.4f}")
         
-    return train_history, val_history
+    return train_history, val_history, best_epoch, best_val_f1, best_state_dict, best_metrics
 
-def run_experiment(dropout, batch_size, train_texts, train_labels, val_texts, val_labels, word_to_idx, vocab_size):
-    print(f"\n--- Starting Experiment: Dropout={dropout}, BatchSize={batch_size} ---")
+def run_experiment(dropout, batch_size, lr, train_texts, train_labels, val_texts, val_labels, word_to_idx, vocab_size):
+    print(f"\n--- Starting Experiment: Dropout={dropout}, BatchSize={batch_size}, LR={lr} ---")
     
     train_dataset = FakeNewsDataset(train_texts, train_labels, word_to_idx)
     val_dataset = FakeNewsDataset(val_texts, val_labels, word_to_idx)
@@ -168,23 +201,69 @@ def run_experiment(dropout, batch_size, train_texts, train_labels, val_texts, va
     class_weights = torch.tensor([weight_0, weight_1], dtype=torch.float).to(device)
     print(f"Applying class weights: Real={weight_0:.2f}, Fake={weight_1:.2f}")
 
-    model = FakeNewsLSTM(vocab_size, embedding_dim=100, hidden_dim=128, output_dim=2, n_layers=2, dropout=dropout).to(device)
-    optimizer = optim.Adam(model.parameters(), lr=0.001)
+    model = FakeNewsLSTM(
+        vocab_size,
+        embedding_dim=LSTM_ARCHITECTURE["embedding_dim"],
+        hidden_dim=LSTM_ARCHITECTURE["hidden_dim"],
+        output_dim=LSTM_ARCHITECTURE["output_dim"],
+        n_layers=LSTM_ARCHITECTURE["n_layers"],
+        dropout=dropout,
+    ).to(device)
+    optimizer = optim.Adam(model.parameters(), lr=lr)
     criterion = nn.CrossEntropyLoss(weight=class_weights)
     
-    train_hist, val_hist = train_model(model, train_loader, val_loader, optimizer, criterion, epochs=15)
+    train_hist, val_hist, best_epoch, best_val_f1, best_state_dict, best_metrics = train_model(
+        model,
+        train_loader,
+        val_loader,
+        optimizer,
+        criterion,
+        epochs=15,
+    )
     
-    # Save the best model (using last as simplified version)
-    results_path = os.path.join(LSTM_DIR, f"lstm_dr{dropout}_bs{batch_size}.pth")
-    torch.save(model.state_dict(), results_path)
+    if best_state_dict is not None:
+        model.load_state_dict(best_state_dict)
+
+    model_file = f"lstm_dr{dropout}_bs{batch_size}_lr{lr_to_tag(lr)}.pth"
+    results_path = os.path.join(LSTM_DIR, model_file)
+    torch.save({
+        "model_state_dict": model.state_dict(),
+        "config": {
+            **LSTM_ARCHITECTURE,
+            "dropout": float(dropout),
+            "batch_size": int(batch_size),
+            "learning_rate": float(lr),
+            "vocab_size": int(vocab_size),
+            "label_mapping": LABEL_MAPPING,
+        },
+        "metrics": {
+            "best_epoch": int(best_epoch),
+            "best_val_f1": float(best_val_f1),
+            "best_val_acc": float(best_metrics["val_acc"]),
+            "best_val_precision": float(best_metrics["val_precision"]),
+            "best_val_recall": float(best_metrics["val_recall"]),
+            "final_val_f1": float(val_hist['f1'][-1]),
+            "final_val_acc": float(val_hist['acc'][-1]),
+            "final_val_precision": float(val_hist['precision'][-1]),
+            "final_val_recall": float(val_hist['recall'][-1]),
+        },
+    }, results_path)
     
     return {
         'dropout': dropout,
         'batch_size': batch_size,
+        'learning_rate': lr,
+        'best_epoch': best_epoch,
+        'best_val_f1': best_val_f1,
+        'best_val_acc': best_metrics["val_acc"],
+        'best_val_precision': best_metrics["val_precision"],
+        'best_val_recall': best_metrics["val_recall"],
         'final_val_f1': val_hist['f1'][-1],
         'final_val_acc': val_hist['acc'][-1],
         'final_val_precision': val_hist['precision'][-1],
         'final_val_recall': val_hist['recall'][-1],
+        'model_file': model_file,
+        'model_path': results_path,
         'train_history': train_hist,
         'val_history': val_hist
     }
@@ -218,30 +297,35 @@ if __name__ == "__main__":
     val_texts = val_df['tokenized_message'].values
     val_labels = val_df['label'].values
     
+    lrs = [1e-3, 5e-4, 1e-4]
     dropouts = [0.1, 0.3, 0.5]
     batch_sizes = [8, 16, 32]
     
     all_results = []
     
-    for dr in dropouts:
-        for bs in batch_sizes:
-            res = run_experiment(dr, bs, train_texts, train_labels, val_texts, val_labels, word_to_idx, vocab_size)
-            all_results.append(res)
+    for lr in lrs:
+        for dr in dropouts:
+            for bs in batch_sizes:
+                res = run_experiment(dr, bs, lr, train_texts, train_labels, val_texts, val_labels, word_to_idx, vocab_size)
+                all_results.append(res)
             
     # Save comparison report and detailed histories
     report_df = pd.DataFrame([{ 
         'Dropout': r['dropout'], 
-        'BatchSize': r['batch_size'], 
-        'Val_F1': r['final_val_f1'],
-        'Val_Acc': r['final_val_acc'],
-        'Val_Precision': r['final_val_precision'],
-        'Val_Recall': r['final_val_recall']
+        'BatchSize': r['batch_size'],
+        'LearningRate': r['learning_rate'],
+        'BestEpoch': r['best_epoch'],
+        'Val_F1': r['best_val_f1'],
+        'Final_Val_F1': r['final_val_f1'],
+        'Val_Acc': r['best_val_acc'],
+        'Val_Precision': r['best_val_precision'],
+        'Val_Recall': r['best_val_recall'],
+        'ModelFile': r['model_file'],
     } for r in all_results])
     
     report_df.to_csv(os.path.join(VISUAL_DIR, "lstm_comparison.csv"), index=False)
     
     # Save all histories to a JSON for visualization
-    import json
     with open(os.path.join(LSTM_DIR, "lstm_histories.json"), "w") as f:
         # Convert numpy floats to standard floats for JSON
         serializable_results = []
@@ -249,6 +333,13 @@ if __name__ == "__main__":
             serializable_results.append({
                 'dropout': float(r['dropout']),
                 'batch_size': int(r['batch_size']),
+                'learning_rate': float(r['learning_rate']),
+                'model_file': r['model_file'],
+                'best_epoch': int(r['best_epoch']),
+                'best_val_f1': float(r['best_val_f1']),
+                'best_val_acc': float(r['best_val_acc']),
+                'best_val_precision': float(r['best_val_precision']),
+                'best_val_recall': float(r['best_val_recall']),
                 'final_val_f1': float(r['final_val_f1']),
                 'train_history': {k: [float(x) for x in v] for k, v in r['train_history'].items()},
                 'val_history': {k: [float(x) for x in v] for k, v in r['val_history'].items()}
@@ -259,6 +350,34 @@ if __name__ == "__main__":
     print(report_df)
     
     # Save vocab for demo
-    import pickle
     with open(os.path.join(LSTM_DIR, "vocab.pkl"), "wb") as f:
         pickle.dump(word_to_idx, f)
+
+    best_result = max(all_results, key=lambda r: r['best_val_f1'])
+    best_model_path = os.path.join(LSTM_DIR, "lstm_best.pth")
+    shutil.copyfile(best_result['model_path'], best_model_path)
+    best_meta = {
+        "model_file": "lstm_best.pth",
+        "source_model_file": best_result["model_file"],
+        "dropout": float(best_result["dropout"]),
+        "batch_size": int(best_result["batch_size"]),
+        "learning_rate": float(best_result["learning_rate"]),
+        "best_epoch": int(best_result["best_epoch"]),
+        "metrics": {
+            "Val_F1": float(best_result["best_val_f1"]),
+            "Val_Acc": float(best_result["best_val_acc"]),
+            "Val_Precision": float(best_result["best_val_precision"]),
+            "Val_Recall": float(best_result["best_val_recall"]),
+        },
+        "architecture": {
+            **LSTM_ARCHITECTURE,
+            "dropout": float(best_result["dropout"]),
+            "vocab_size": int(vocab_size),
+        },
+        "label_mapping": LABEL_MAPPING,
+    }
+    with open(os.path.join(LSTM_DIR, "lstm_best_meta.json"), "w") as f:
+        json.dump(best_meta, f, indent=2)
+
+    print("\nBest LSTM model saved:")
+    print(best_meta)

@@ -1,8 +1,10 @@
 import torch
 from transformers import AutoTokenizer, AutoModelForSequenceClassification, Trainer, TrainingArguments
 from torch.utils.data import Dataset
+import inspect
 import pandas as pd
 import numpy as np
+import json
 import os
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 
@@ -51,6 +53,21 @@ os.makedirs(RESULTS_DIR, exist_ok=True)
 
 # ---------------------------------
 
+LABEL_MAPPING = {0: "Real", 1: "Fake"}
+
+
+def lr_to_tag(lr):
+    return f"{lr:.0e}".replace("e-0", "e-").replace("e+0", "e").replace("+", "")
+
+
+def build_training_args(**kwargs):
+    strategy_key = "eval_strategy"
+    if strategy_key not in inspect.signature(TrainingArguments.__init__).parameters:
+        strategy_key = "evaluation_strategy"
+    kwargs[strategy_key] = "epoch"
+    return TrainingArguments(**kwargs)
+
+
 class FakeNewsBERTDataset(Dataset):
     def __init__(self, encodings, labels):
         self.encodings = encodings
@@ -78,8 +95,9 @@ def compute_metrics(pred):
         'f1': f1,
     }
 
-def run_phobert_experiment(dropout, batch_size, learning_rate, train_texts, train_labels, val_texts, val_labels):
+def run_phobert_experiment(dropout, batch_size, learning_rate, train_texts, train_labels, val_texts, val_labels, best_score=-1.0):
     print(f"\n--- Starting PhoBERT Experiment: Dropout={dropout}, BatchSize={batch_size}, LR={learning_rate} ---")
+    run_name = f"phobert_dr{dropout}_bs{batch_size}_lr{lr_to_tag(learning_rate)}"
     
     tokenizer = AutoTokenizer.from_pretrained("vinai/phobert-base")
     
@@ -89,29 +107,36 @@ def run_phobert_experiment(dropout, batch_size, learning_rate, train_texts, trai
     train_dataset = FakeNewsBERTDataset(train_encodings, train_labels)
     val_dataset = FakeNewsBERTDataset(val_encodings, val_labels)
     
-    model = AutoModelForSequenceClassification.from_pretrained("vinai/phobert-base", num_labels=2)
+    model = AutoModelForSequenceClassification.from_pretrained(
+        "vinai/phobert-base", 
+        num_labels=2,
+        hidden_dropout_prob=dropout,
+        attention_probs_dropout_prob=dropout
+    )
+    model.config.id2label = LABEL_MAPPING
+    model.config.label2id = {"Real": 0, "Fake": 1}
     
     # Unfrozen PhoBERT encoder layers for full fine-tuning
     # for param in model.roberta.parameters():
     #     param.requires_grad = False
 
-        
-    model.config.hidden_dropout_prob = dropout
-    model.config.attention_probs_dropout_prob = dropout
     model.to(device)
     
-    training_args = TrainingArguments(
-        output_dir=os.path.join(RESULTS_DIR, f"phobert_dr{dropout}_bs{batch_size}_lr{learning_rate}"),
+    training_args = build_training_args(
+        output_dir=os.path.join(RESULTS_DIR, run_name),
         num_train_epochs=3,
         per_device_train_batch_size=batch_size,
         per_device_eval_batch_size=batch_size,
-        eval_strategy="epoch",
         save_strategy="epoch",
         learning_rate=learning_rate,
         weight_decay=0.01,
         load_best_model_at_end=True,
+        metric_for_best_model="f1",
+        greater_is_better=True,
+        save_total_limit=1,
         logging_dir=os.path.join(BASE_PATH, 'logs'),
         logging_steps=50,
+        report_to="none",
     )
     
     trainer = Trainer(
@@ -124,15 +149,32 @@ def run_phobert_experiment(dropout, batch_size, learning_rate, train_texts, trai
     
     trainer.train()
     eval_result = trainer.evaluate()
+    val_f1 = eval_result['eval_f1']
+    saved_as_best = val_f1 > best_score
     
-    # Save model and tokenizer in format compatible with from_pretrained
-    model_save_path = PHOBERT_BEST_PATH
-    os.makedirs(model_save_path, exist_ok=True)
-    trainer.save_model(model_save_path)
-    tokenizer.save_pretrained(model_save_path) # Save tokenizer too for easy loading
-    
-    # Also save a .pth for compatibility if needed
-    torch.save(model.state_dict(), os.path.join(model_save_path, "phobert_best.pth"))
+    if saved_as_best:
+        os.makedirs(PHOBERT_BEST_PATH, exist_ok=True)
+        trainer.save_model(PHOBERT_BEST_PATH)
+        tokenizer.save_pretrained(PHOBERT_BEST_PATH)
+        torch.save(model.state_dict(), os.path.join(PHOBERT_BEST_PATH, "phobert_best.pth"))
+
+        best_meta = {
+            "model_dir": "phobert_best",
+            "source_run": run_name,
+            "dropout": float(dropout),
+            "batch_size": int(batch_size),
+            "learning_rate": float(learning_rate),
+            "metrics": {
+                "Val_F1": float(val_f1),
+                "Val_Acc": float(eval_result.get('eval_accuracy', 0.0)),
+                "Val_Precision": float(eval_result.get('eval_precision', 0.0)),
+                "Val_Recall": float(eval_result.get('eval_recall', 0.0)),
+            },
+            "label_mapping": LABEL_MAPPING,
+        }
+        with open(os.path.join(PHOBERT_DIR, "phobert_best_meta.json"), "w") as f:
+            json.dump(best_meta, f, indent=2)
+        print(f"New best PhoBERT saved to {PHOBERT_BEST_PATH} (F1={val_f1:.4f})")
     
     # Extract history
     history = trainer.state.log_history
@@ -147,14 +189,13 @@ def run_phobert_experiment(dropout, batch_size, learning_rate, train_texts, trai
         if 'eval_f1' in log:
             val_history['f1'].append(log['eval_f1'])
     
-    # Fill in dummy F1 for training if not calculated to keep lengths consistent for plotting
-    train_history['f1'] = [0.0] * len(train_history['loss'])
-    
     return {
         'dropout': dropout,
         'batch_size': batch_size,
         'learning_rate': learning_rate,
-        'val_f1': eval_result['eval_f1'],
+        'run_name': run_name,
+        'saved_as_best': saved_as_best,
+        'val_f1': val_f1,
         'val_acc': eval_result.get('eval_accuracy', 0.0),
         'val_precision': eval_result.get('eval_precision', 0.0),
         'val_recall': eval_result.get('eval_recall', 0.0),
@@ -175,22 +216,31 @@ if __name__ == "__main__":
     train_df = pd.read_csv(train_path)
     val_df = pd.read_csv(val_path)
     
-    # Due to time constraints in demo, I will only run a few key combinations for PhoBERT
-    # or just one if it's too slow.
-    lrs = [2e-5] # Lower LR for full fine-tuning to prevent catastrophic forgetting
-
+    lrs = [2e-5, 3e-5, 5e-5]
     dropouts = [0.1, 0.3, 0.5]
     batch_sizes = [8, 16, 32]
 
 
     
     all_bert_results = []
+    best_score = -1.0
     
     for lr in lrs:
         for dr in dropouts:
             for bs in batch_sizes:
-                res = run_phobert_experiment(dr, bs, lr, train_df['clean_message'], train_df['label'], val_df['clean_message'], val_df['label'])
+                res = run_phobert_experiment(
+                    dr,
+                    bs,
+                    lr,
+                    train_df['tokenized_message'],
+                    train_df['label'],
+                    val_df['tokenized_message'],
+                    val_df['label'],
+                    best_score=best_score,
+                )
                 all_bert_results.append(res)
+                if res['saved_as_best']:
+                    best_score = res['val_f1']
                 
     report_df = pd.DataFrame([{
         'Dropout': r['dropout'],
@@ -199,13 +249,14 @@ if __name__ == "__main__":
         'Val_F1': r['val_f1'],
         'Val_Acc': r['val_acc'],
         'Val_Precision': r['val_precision'],
-        'Val_Recall': r['val_recall']
+        'Val_Recall': r['val_recall'],
+        'SavedAsBest': r['saved_as_best'],
+        'RunName': r['run_name'],
     } for r in all_bert_results])
     
     report_df.to_csv(os.path.join(VISUAL_DIR, "phobert_comparison.csv"), index=False)
     
     # Save all histories to a JSON for visualization (similar to LSTM)
-    import json
     class NpEncoder(json.JSONEncoder):
         def default(self, obj):
             if isinstance(obj, np.integer):
@@ -222,3 +273,16 @@ if __name__ == "__main__":
         
     print("\nPhoBERT Optimization Summary:")
     print(report_df)
+
+    best_result = max(all_bert_results, key=lambda r: r['val_f1'])
+    print("\nBest PhoBERT model:")
+    print({
+        "run_name": best_result["run_name"],
+        "dropout": best_result["dropout"],
+        "batch_size": best_result["batch_size"],
+        "learning_rate": best_result["learning_rate"],
+        "Val_F1": best_result["val_f1"],
+        "Val_Acc": best_result["val_acc"],
+        "Val_Precision": best_result["val_precision"],
+        "Val_Recall": best_result["val_recall"],
+    })
