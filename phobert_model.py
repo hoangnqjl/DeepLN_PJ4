@@ -44,12 +44,12 @@ if IN_COLAB:
 else:
     BASE_PATH = "."
 
-PHOBERT_DIR = os.path.join(BASE_PATH, "phobert")
-VISUAL_DIR = os.path.join(BASE_PATH, "visual")
+PHOBERT_DIR = os.path.join(BASE_PATH, "file_train", "phobert")
+VISUAL_DIR = os.path.join(BASE_PATH, "file_train", "visual", "visual")
 os.makedirs(PHOBERT_DIR, exist_ok=True)
 os.makedirs(VISUAL_DIR, exist_ok=True)
 PHOBERT_BEST_PATH = os.path.join(PHOBERT_DIR, "phobert_best")
-RESULTS_DIR = os.path.join(PHOBERT_DIR, "results")
+RESULTS_DIR = os.path.join(PHOBERT_DIR, "result")
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
 # ---------------------------------
@@ -141,8 +141,8 @@ def run_phobert_experiment(dropout, batch_size, learning_rate, train_texts, trai
     
     tokenizer = AutoTokenizer.from_pretrained("vinai/phobert-base")
     
-    train_encodings = tokenizer(train_texts.tolist(), truncation=True, padding=True, max_length=96)
-    val_encodings = tokenizer(val_texts.tolist(), truncation=True, padding=True, max_length=96)
+    train_encodings = tokenizer(train_texts.tolist(), truncation=True, padding=True, max_length=256)
+    val_encodings = tokenizer(val_texts.tolist(), truncation=True, padding=True, max_length=256)
     
     train_dataset = FakeNewsBERTDataset(train_encodings, train_labels)
     val_dataset = FakeNewsBERTDataset(val_encodings, val_labels)
@@ -164,7 +164,7 @@ def run_phobert_experiment(dropout, batch_size, learning_rate, train_texts, trai
     
     training_args = build_training_args(
         output_dir=os.path.join(RESULTS_DIR, run_name),
-        num_train_epochs=3,
+        num_train_epochs=5,
         per_device_train_batch_size=batch_size,
         per_device_eval_batch_size=batch_size,
         save_strategy="epoch",
@@ -268,9 +268,9 @@ if __name__ == "__main__":
     train_df = pd.read_csv(train_path)
     val_df = pd.read_csv(val_path)
     
-    lrs = [2e-5, 3e-5, 5e-5]
-    dropouts = [0.1, 0.3, 0.5]
-    batch_sizes = [8, 16, 32]
+    lrs = [3e-5]
+    dropouts = [0.1]
+    batch_sizes = [16]
 
 
     
@@ -350,3 +350,40 @@ if __name__ == "__main__":
         "Val_Precision": best_result["val_precision"],
         "Val_Recall": best_result["val_recall"],
     })
+
+    # === THÊM CODE TỰ ĐỘNG COPY MODEL TỐT NHẤT VÀO THƯ MỤC PHOBERT_BEST ===
+    import shutil
+    from transformers.trainer_utils import get_last_checkpoint
+    
+    best_run_name = best_result["run_name"]
+    best_checkpoint_dir = os.path.join(RESULTS_DIR, best_run_name)
+    actual_checkpoint = get_last_checkpoint(best_checkpoint_dir)
+    
+    if actual_checkpoint:
+        print(f"\n[INFO] Đang copy mô hình tốt nhất ({best_run_name}) vào {PHOBERT_BEST_PATH}...")
+        os.makedirs(PHOBERT_BEST_PATH, exist_ok=True)
+        
+        # Copy toàn bộ file cấu hình + trọng số
+        for item in os.listdir(actual_checkpoint):
+            s = os.path.join(actual_checkpoint, item)
+            d = os.path.join(PHOBERT_BEST_PATH, item)
+            if os.path.isdir(s):
+                if os.path.exists(d):
+                    shutil.rmtree(d)
+                shutil.copytree(s, d)
+            else:
+                shutil.copy2(s, d)
+                
+        # Đồng thời lưu đè file meta chuẩn nhất
+        best_meta = {
+            "dropout": best_result["dropout"],
+            "batch_size": best_result["batch_size"],
+            "learning_rate": best_result["learning_rate"],
+            "val_f1": float(best_result["val_f1"]),
+            "val_acc": float(best_result["val_acc"]),
+            "val_precision": float(best_result["val_precision"]),
+            "val_recall": float(best_result["val_recall"]),
+            "label_mapping": LABEL_MAPPING,
+        }
+        save_json_atomic(best_meta, os.path.join(PHOBERT_DIR, "phobert_best_meta.json"))
+        print(f"✅ Đã lưu xong mô hình xuất sắc nhất lịch sử vào {PHOBERT_BEST_PATH}!")

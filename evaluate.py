@@ -14,7 +14,7 @@ if IN_COLAB:
 else:
     BASE_PATH = "."
 
-VISUAL_DIR = os.path.join(BASE_PATH, "visual")
+VISUAL_DIR = os.path.join(BASE_PATH, "file_train", "visual", "visual")
 
 
 def read_comparison(filename):

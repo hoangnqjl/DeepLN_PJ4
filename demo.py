@@ -30,9 +30,9 @@ if IN_COLAB:
 else:
     BASE_PATH = "."
 
-LSTM_DIR = os.path.join(BASE_PATH, "lstm")
-PHOBERT_DIR = os.path.join(BASE_PATH, "phobert")
-VISUAL_DIR = os.path.join(BASE_PATH, "visual")
+LSTM_DIR = os.path.join(BASE_PATH, "file_train", "ltsm", "lstm")
+PHOBERT_DIR = os.path.join(BASE_PATH, "file_train", "phobert")
+VISUAL_DIR = os.path.join(BASE_PATH, "file_train", "visual", "visual")
 
 LABEL_MAPPING = {0: "Real", 1: "Fake"}
 
@@ -223,6 +223,10 @@ def main():
     print("Label mapping: 0 = Real, 1 = Fake")
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    if device.type == 'cuda':
+        print("🚀 Đang chạy bằng GPU (CUDA)!")
+    else:
+        print("⚠️ Đang chạy bằng CPU!")
     lstm_model, word_to_idx, lstm_max_len = load_lstm(device)
     phobert_model, phobert_tokenizer = load_phobert(device)
 

@@ -16,9 +16,9 @@ if IN_COLAB:
 else:
     BASE_PATH = "."
 
-LSTM_DIR = os.path.join(BASE_PATH, "lstm")
-PHOBERT_DIR = os.path.join(BASE_PATH, "phobert")
-VISUAL_DIR = os.path.join(BASE_PATH, "visual")
+LSTM_DIR = os.path.join(BASE_PATH, "file_train", "ltsm", "lstm")
+PHOBERT_DIR = os.path.join(BASE_PATH, "file_train", "phobert")
+VISUAL_DIR = os.path.join(BASE_PATH, "file_train", "visual", "visual")
 os.makedirs(VISUAL_DIR, exist_ok=True)
 
 
