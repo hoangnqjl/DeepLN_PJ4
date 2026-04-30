@@ -164,7 +164,7 @@ def run_phobert_experiment(dropout, batch_size, learning_rate, train_texts, trai
     
     training_args = build_training_args(
         output_dir=os.path.join(RESULTS_DIR, run_name),
-        num_train_epochs=5,
+        num_train_epochs=3,
         per_device_train_batch_size=batch_size,
         per_device_eval_batch_size=batch_size,
         save_strategy="epoch",
@@ -268,9 +268,9 @@ if __name__ == "__main__":
     train_df = pd.read_csv(train_path)
     val_df = pd.read_csv(val_path)
     
-    lrs = [3e-5]
-    dropouts = [0.1]
-    batch_sizes = [16]
+    lrs = [2e-5, 3e-5, 5e-5]
+    dropouts = [0.1, 0.3, 0.5]
+    batch_sizes = [8, 16, 32]
 
 
     
