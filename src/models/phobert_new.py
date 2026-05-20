@@ -306,7 +306,6 @@ if __name__ == "__main__":
     val_df = pd.read_csv(val_path)
     
     lrs = [5e-5, 1e-4, 2e-4]
-
     dropouts = [0.1, 0.3, 0.5]
     batch_sizes = [8, 16, 32]
 

@@ -12,6 +12,14 @@ import pickle
 import shutil
 import matplotlib.pyplot as plt
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+import argparse
+
+# Parse known arguments to handle running inside notebooks and other environments
+parser = argparse.ArgumentParser()
+parser.add_argument('--data_version', type=str, default='data_01', help='Dataset version (data_01 or data_03)')
+args, _ = parser.parse_known_args()
+data_version = args.data_version
+print(f"Dataset version selected: {data_version}")
 
 # Set device
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -48,7 +56,7 @@ if IN_COLAB:
 else:
     BASE_PATH = "."
 
-LSTM_DIR = os.path.join(BASE_PATH, "checkpoints", "lstm")
+LSTM_DIR = os.path.join(BASE_PATH, "checkpoints", f"lstm_{data_version}")
 VISUAL_DIR = os.path.join(BASE_PATH, "checkpoints", "visual")
 os.makedirs(LSTM_DIR, exist_ok=True)
 os.makedirs(VISUAL_DIR, exist_ok=True)
@@ -278,12 +286,12 @@ def run_experiment(dropout, batch_size, lr, train_texts, train_labels, val_texts
 
 if __name__ == "__main__":
     # Load data from local or Drive
-    train_path = os.path.join(BASE_PATH, "data/processed/train.csv")
-    val_path = os.path.join(BASE_PATH, "data/processed/val.csv")
+    train_path = os.path.join(BASE_PATH, f"data/{data_version}/processed/train.csv")
+    val_path = os.path.join(BASE_PATH, f"data/{data_version}/processed/val.csv")
     
     if not os.path.exists(train_path):
-        train_path = "data/processed/train.csv"
-        val_path = "data/processed/val.csv"
+        train_path = f"data/{data_version}/processed/train.csv"
+        val_path = f"data/{data_version}/processed/val.csv"
 
     # [STEP 1: TEXT DATA] - Nạp dữ liệu thô từ file CSV
     train_df = pd.read_csv(train_path)
