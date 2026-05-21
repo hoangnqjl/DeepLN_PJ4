@@ -383,6 +383,57 @@ def plot_master_comparison(best_results):
     plt.close()
     print(f"[+] Saved Master Comparison to {output_path}")
 
+def plot_trend_line(results_list):
+    versions = ["V1", "V2", "V3"]
+    lstm_scores = []
+    phobert_scores = []
+    
+    for v in versions:
+        lstm_f1 = next((r['Val_F1'] for r in results_list if r['Version'] == v and r['Model'] == 'LSTM'), None)
+        phobert_f1 = next((r['Val_F1'] for r in results_list if r['Version'] == v and r['Model'] == 'PhoBERT'), None)
+        lstm_scores.append(lstm_f1)
+        phobert_scores.append(phobert_f1)
+        
+    plt.figure(figsize=(10, 6))
+    
+    # Filter out None values to plot line properly if a version is missing
+    v_lstm = [v for v, s in zip(versions, lstm_scores) if s is not None]
+    s_lstm = [s for s in lstm_scores if s is not None]
+    
+    v_pho = [v for v, s in zip(versions, phobert_scores) if s is not None]
+    s_pho = [s for s in phobert_scores if s is not None]
+    
+    if len(s_lstm) > 0:
+        plt.plot(v_lstm, s_lstm, marker='o', markersize=8, linewidth=2.5, color='#3498db', label='Bi-LSTM')
+        for i, txt in enumerate(s_lstm):
+            plt.annotate(f'{txt:.4f}', (v_lstm[i], s_lstm[i]), textcoords="offset points", xytext=(0,10), ha='center', fontweight='bold', color='#2980b9')
+            
+    if len(s_pho) > 0:
+        plt.plot(v_pho, s_pho, marker='s', markersize=8, linewidth=2.5, color='#e74c3c', label='PhoBERT')
+        for i, txt in enumerate(s_pho):
+            plt.annotate(f'{txt:.4f}', (v_pho[i], s_pho[i]), textcoords="offset points", xytext=(0,-15), ha='center', fontweight='bold', color='#c0392b')
+            
+    plt.xlabel('Dataset Version (V1 -> V2 -> V3)', fontsize=12, fontweight='bold', labelpad=10)
+    plt.ylabel('Validation F1 Score', fontsize=12, fontweight='bold')
+    plt.title('Performance Growth Trend Across Versions', fontsize=15, fontweight='bold', pad=20)
+    
+    # Custom x-axis labels
+    plt.xticks(versions, [
+        'V1\n(4.3K samples)',
+        'V2\n(4.9K samples)',
+        'V3\n(5.6K samples)'
+    ], fontsize=11)
+    
+    plt.ylim(0.8, 0.95) # Zoom in to see the trend better
+    plt.grid(axis='both', linestyle='--', alpha=0.5)
+    plt.legend(loc='lower right', fontsize=12, frameon=True, shadow=True)
+    
+    plt.tight_layout()
+    output_path = os.path.join(VISUAL_DIR, "performance_trend_line.png")
+    plt.savefig(output_path, dpi=150, bbox_inches="tight")
+    plt.close()
+    print(f"[+] Saved Performance Trend Line to {output_path}")
+
 
 def main():
     print("==================================================")
@@ -444,6 +495,7 @@ def main():
     # 4. Vẽ Master Comparison Chart nếu có dữ liệu
     if best_results_list:
         plot_master_comparison(best_results_list)
+        plot_trend_line(best_results_list)
         # Lưu CSV tổng hợp để tiện theo dõi
         master_df = pd.DataFrame(best_results_list)
         master_csv_path = os.path.join(VISUAL_DIR, "master_version_comparison.csv")
