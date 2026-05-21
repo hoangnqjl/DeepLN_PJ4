@@ -58,6 +58,8 @@ def locate_history(model_type, version):
             candidates.extend([
                 "checkpoints/checkpoints_02/phobert",
                 "checkpoints_02/phobert",
+                "checkpoints/checkpoints_02",
+                "checkpoints_02",
                 "checkpoints/phobert_data_02",
                 "phobert_data_02"
             ])

@@ -34,7 +34,7 @@ def locate_history(model_type, version):
         if model_type == "lstm":
             candidates.extend(["checkpoints/checkpoints_02/lstm", "checkpoints_02/lstm"])
         else:
-            candidates.extend(["checkpoints/checkpoints_02/phobert", "checkpoints_02/phobert"])
+            candidates.extend(["checkpoints/checkpoints_02/phobert", "checkpoints_02/phobert", "checkpoints/checkpoints_02", "checkpoints_02"])
     elif version == 3:
         if model_type == "lstm":
             candidates.extend(["checkpoints/lstm_data_03", "lstm_data_03"])
