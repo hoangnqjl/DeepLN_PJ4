@@ -35,7 +35,7 @@ else:
     BASE_PATH = "."
 
 LSTM_DIR = os.path.join(BASE_PATH, "checkpoints", "lstm")
-PHOBERT_DIR = os.path.join(BASE_PATH, "checkpoints", "phobert")
+PHOBERT_DIR = os.path.join(BASE_PATH, "checkpoints", "checkpoints_03")
 VISUAL_DIR = os.path.join(BASE_PATH, "checkpoints", "visual")
 
 LABEL_MAPPING = {0: "Real", 1: "Fake"}
@@ -189,7 +189,22 @@ def load_phobert(device):
         return None, None
 
     tokenizer = AutoTokenizer.from_pretrained(phobert_path)
-    model = AutoModelForSequenceClassification.from_pretrained(phobert_path).to(device)
+    
+    if os.path.exists(os.path.join(phobert_path, "adapter_config.json")):
+        print(f"Detected PEFT model at {phobert_path}. Loading with PEFT...")
+        try:
+            from peft import PeftModel
+            base_model = AutoModelForSequenceClassification.from_pretrained("vinai/phobert-base", num_labels=2)
+            base_model.config.id2label = LABEL_MAPPING
+            base_model.config.label2id = {"Real": 0, "Fake": 1}
+            model = PeftModel.from_pretrained(base_model, phobert_path)
+            model.to(device)
+        except ImportError:
+            print("[!] peft library is required to load this model. Install it via: pip install peft")
+            return None, tokenizer
+    else:
+        model = AutoModelForSequenceClassification.from_pretrained(phobert_path).to(device)
+        
     print(f"Loaded PhoBERT from {phobert_path}")
     return model, tokenizer
 

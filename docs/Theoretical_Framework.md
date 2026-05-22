@@ -109,3 +109,22 @@ Sau khi dự đoán, ta cần các thước đo để biết mô hình tốt đ�
 *   **Precision (Độ chính xác trên lớp dự đoán):** Trong những tin mô hình bảo là "Giả", có bao nhiêu tin thực sự là "Giả".
 *   **Recall (Độ triệu hồi):** Trong tất cả các tin "Giả" thực tế, mô hình tìm ra được bao nhiêu tin.
 *   **F1-Score:** Giá trị trung bình điều hòa giữa Precision và Recall. Đây là thước đo quan trọng nhất khi dữ liệu bị lệch (số tin thật nhiều hơn tin giả hoặc ngược lại).
+
+---
+
+## 7. Kết Luận
+
+Dự án đã triển khai thành công hệ thống nhận diện tin giả (Fake News Detection) cho văn bản tiếng Việt, áp dụng cả hai kiến trúc học sâu phổ biến là LSTM và PhoBERT. Qua quá trình thực nghiệm, có thể rút ra một số kết luận:
+*   **Hiệu năng mô hình:** PhoBERT, nhờ cơ chế Self-Attention và kiến thức ngôn ngữ học sẵn (pre-trained), thể hiện sự vượt trội trong việc nắm bắt ngữ cảnh phức tạp của tiếng Việt. LSTM tuy có lợi thế về tốc độ huấn luyện và triển khai nhẹ nhàng nhưng bị hạn chế khi xử lý các câu văn quá dài.
+*   **Quy trình chuẩn hóa:** Việc xây dựng một pipeline chuẩn từ bước làm sạch dữ liệu, mã hóa (Tokenization) đến tinh chỉnh (Fine-tuning) giúp hệ thống hoạt động ổn định và có thể tái sử dụng dễ dàng.
+*   **Xử lý dữ liệu:** Các kỹ thuật xử lý dữ liệu mất cân bằng (như điều chỉnh Class Weights) đóng vai trò quyết định giúp mô hình không bị thiên lệch, đảm bảo độ tin cậy của chỉ số F1-Score.
+
+---
+
+## 8. Hướng Phát Triển (Future Work)
+
+Để nâng cao độ chính xác và tính ứng dụng thực tiễn, hệ thống có thể được cải tiến theo các hướng sau:
+1.  **Mở rộng tập dữ liệu:** Thu thập thêm dữ liệu từ nhiều lĩnh vực khác nhau (y tế, chính trị, tài chính) và liên tục cập nhật các mẫu tin giả mới để mô hình thích ứng với các chiêu thức lừa đảo mới.
+2.  **Mô hình Đa phương thức (Multi-modal):** Bổ sung khả năng phân tích hình ảnh đính kèm, metadata (nguồn đăng tải, thời gian đăng) và mạng lưới lan truyền (lượt share, bình luận) bên cạnh văn bản để đưa ra quyết định toàn diện hơn.
+3.  **Khả năng giải thích (Explainable AI - XAI):** Tích hợp các kỹ thuật hiển thị sự chú ý (Attention visualization) để hệ thống không chỉ dự đoán mà còn highlight các câu/từ đáng ngờ, giúp người dùng hiểu tại sao đó là tin giả.
+4.  **Triển khai thực tiễn:** Xây dựng thành API Service, tiện ích mở rộng trên trình duyệt (Browser Extension) hoặc bot trên Telegram/Messenger để hỗ trợ người dùng kiểm chứng tin tức một cách nhanh chóng.

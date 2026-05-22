@@ -18,11 +18,17 @@ app = FastAPI(title="Fake News Detection")
 # Setup device
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-# Load models toàn cục để dùng chung
-print("🚀 Đang tải các mô hình AI...")
-lstm_model, word_to_idx, lstm_max_len = load_lstm(device)
-phobert_model, phobert_tokenizer = load_phobert(device)
-print("✅ Mô hình đã sẵn sàng!")
+lstm_model, word_to_idx, lstm_max_len = None, None, 100
+phobert_model, phobert_tokenizer = None, None
+
+@app.on_event("startup")
+async def load_models():
+    global lstm_model, word_to_idx, lstm_max_len
+    global phobert_model, phobert_tokenizer
+    print("🚀 Đang tải các mô hình AI...")
+    lstm_model, word_to_idx, lstm_max_len = load_lstm(device)
+    phobert_model, phobert_tokenizer = load_phobert(device)
+    print("✅ Mô hình đã sẵn sàng!")
 
 # Mount static files (để chứa CSS/JS)
 os.makedirs("static", exist_ok=True)
@@ -74,4 +80,4 @@ async def api_predict_image(file: UploadFile = File(...)):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8080)
