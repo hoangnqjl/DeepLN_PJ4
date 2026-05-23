@@ -114,7 +114,7 @@ def build_training_args(**kwargs):
     kwargs[strategy_key] = "epoch"
     return TrainingArguments(**kwargs)
 
-
+# Định nghĩa Custom Dataset (Tiền xử lý tách thẻ <s> và gắn thẻ </s>)
 class FakeNewsBERTDataset(Dataset):
     def __init__(self, encodings, labels):
         self.encodings = encodings
@@ -175,10 +175,10 @@ def run_phobert_experiment(dropout, batch_size, learning_rate, train_texts, trai
         peft_config = LoraConfig(
             task_type=TaskType.SEQ_CLS,
             inference_mode=False,
-            r=8,              # Rank (Small is fast, large is smarter)
-            lora_alpha=32,    # Scaling factor
-            lora_dropout=0.1, # Dropout for LoRA layers
-            target_modules=["query", "value"] # Target layers in PhoBERT (RobertaSelfAttention)
+            r=8,              # Rank (Hệ số nén ma trận): Càng nhỏ học càng nhanh, càng lớn học càng kỹ
+            lora_alpha=32,    # Scaling factor (Hệ số khuếch đại): Mức độ ảnh hưởng của LoRA lên trọng số gốc. Thường = 2 hoặc 4 lần Rank.
+            lora_dropout=0.1, # Dropout (Tỷ lệ bỏ rơi ngẫu nhiên): Tắt ngẫu nhiên 10% neuron của ma trận LoRA để chống học vẹt (Overfitting).
+            target_modules=["query", "value"] # Vị trí cấy ghép: Chỉ định cấy LoRA vào 2 ma trận Q (Query) và V (Value) của cơ chế Attention.
         )
         model = get_peft_model(model, peft_config)
         model.print_trainable_parameters()
@@ -199,7 +199,7 @@ def run_phobert_experiment(dropout, batch_size, learning_rate, train_texts, trai
         per_device_eval_batch_size=batch_size,
         save_strategy="epoch",
         learning_rate=learning_rate,
-        weight_decay=0.01,
+        weight_decay=0.01, #chống học vẹt
         load_best_model_at_end=True,
         metric_for_best_model="f1",
         greater_is_better=True,

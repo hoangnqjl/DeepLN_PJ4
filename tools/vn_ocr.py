@@ -15,7 +15,10 @@ def get_reader():
     return _reader
 
 def post_process_vietnamese(text):
+    # HẬU XỬ LÝ 1: OCR hay nhầm chữ 'I' in hoa thành 'l' in thường (vd: TỘl -> TỘI). Dùng Regex để ép chữ 'l' đứng sau ký tự in hoa thành chữ 'I'.
     text = re.sub(r'([A-ZÀÁẢÃẠĂẮẰẲẴẶÂẤẦẨẪẬÈÉẺẼẸÊẾỀỂỄỆĐÌÍỈĨỊÒÓỎÕỌÔỐỒỔỖỘƠỚỜỞỠỢÙÚỦŨỤƯỨỪỬỮỰỲÝỶỸỴ])l\b', r'\1I', text)
+    
+    # HẬU XỬ LÝ 2: Sử dụng bộ Từ điển Hard-code để sửa các lỗi nhận diện "ảo giác" của thư viện đối với tiếng Việt có dấu.
     text = text.replace("@UẨN", "QUÂN").replace("sẢM", "SẢN").replace("TAI", "TÀI")
     text = text.replace("CỐÝ", "CỐ Ý").replace("TUHINH", "TỬ HÌNH")
     
@@ -45,12 +48,17 @@ def extract_text_from_image(image_source):
         
     if img is None: return ""
 
-    # Tiền xử lý
+    # TIỀN XỬ LÝ ẢNH BẰNG OPENCV: Làm nét và chuẩn hóa ảnh mờ/nén từ Facebook/Zalo
+    # 1. Resize: Phóng to ảnh lên 2.5 lần để chữ sắc nét hơn (dùng nội suy INTER_CUBIC)
     img = cv2.resize(img, None, fx=2.5, fy=2.5, interpolation=cv2.INTER_CUBIC)
+    # 2. Grayscale: Chuyển ảnh màu sang xám để giảm tải tính toán
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    # 3. CLAHE: Cân bằng sáng tối cục bộ (cứu những ảnh bị chói sáng một góc hoặc tối mù)
     clahe = cv2.createCLAHE(clipLimit=3.5, tileGridSize=(8,8))
     contrast = clahe.apply(gray)
+    # 4. Invert: Đảo ngược màu (đen thành trắng, trắng thành đen)
     inverted = cv2.bitwise_not(contrast)
+    # 5. Otsu Threshold: Nhị phân hóa tuyệt đối. Tẩy trắng nền, làm nét chữ đen mượt mà, khử sạch nhiễu hạt muối tiêu.
     _, thresh = cv2.threshold(inverted, 160, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
     os.makedirs("output", exist_ok=True)
@@ -58,6 +66,7 @@ def extract_text_from_image(image_source):
     cv2.imwrite(temp_path, thresh)
 
     reader = get_reader()
+    # Gọi EasyOCR đọc chữ. Tham số paragraph=True tự động gom cụm (cluster) các dòng chữ có khoảng cách gần và thẳng lề thành một Đoạn Văn duy nhất.
     results = reader.readtext(temp_path, detail=1, paragraph=True, contrast_ths=0.05)
 
     content_lines = []

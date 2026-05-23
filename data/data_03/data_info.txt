@@ -11,7 +11,3 @@ THÔNG TIN DATASET - NGÀY 15/05/2026
 - Tin thật (Label 0): 3,558 (63.5%)
 - Tin giả (Label 1): 2,042 (36.5%)
 
-3. Ghi chú:
-- Bộ dữ liệu này đã đạt trạng thái cân bằng tốt hơn (tỉ lệ tin giả tăng từ 28% lên 36.5%).
-- Sẵn sàng để thực hiện Preprocess và huấn luyện lại các mô hình AI (LSTM, PhoBERT) để đạt độ chính xác cao hơn.
-- Mọi thay đổi tiếp theo nên thực hiện trên bản copy này.

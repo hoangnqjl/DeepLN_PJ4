@@ -162,7 +162,7 @@ def run_phobert_experiment(dropout, batch_size, learning_rate, train_texts, trai
     model.config.id2label = LABEL_MAPPING
     model.config.label2id = {"Real": 0, "Fake": 1}
     
-    # Unfrozen PhoBERT encoder layers for full fine-tuning
+    # Frozen PhoBERT encoder layers for full fine-tuning
     for param in model.roberta.parameters():
         param.requires_grad = False
 
