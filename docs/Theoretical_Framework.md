@@ -121,10 +121,4 @@ Dự án đã triển khai thành công hệ thống nhận diện tin giả (Fa
 
 ---
 
-## 8. Hướng Phát Triển (Future Work)
 
-Để nâng cao độ chính xác và tính ứng dụng thực tiễn, hệ thống có thể được cải tiến theo các hướng sau:
-1.  **Mở rộng tập dữ liệu:** Thu thập thêm dữ liệu từ nhiều lĩnh vực khác nhau (y tế, chính trị, tài chính) và liên tục cập nhật các mẫu tin giả mới để mô hình thích ứng với các chiêu thức lừa đảo mới.
-2.  **Mô hình Đa phương thức (Multi-modal):** Bổ sung khả năng phân tích hình ảnh đính kèm, metadata (nguồn đăng tải, thời gian đăng) và mạng lưới lan truyền (lượt share, bình luận) bên cạnh văn bản để đưa ra quyết định toàn diện hơn.
-3.  **Khả năng giải thích (Explainable AI - XAI):** Tích hợp các kỹ thuật hiển thị sự chú ý (Attention visualization) để hệ thống không chỉ dự đoán mà còn highlight các câu/từ đáng ngờ, giúp người dùng hiểu tại sao đó là tin giả.
-4.  **Triển khai thực tiễn:** Xây dựng thành API Service, tiện ích mở rộng trên trình duyệt (Browser Extension) hoặc bot trên Telegram/Messenger để hỗ trợ người dùng kiểm chứng tin tức một cách nhanh chóng.
